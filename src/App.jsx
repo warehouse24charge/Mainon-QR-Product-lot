@@ -25,7 +25,16 @@ import {
   clearHistoryLogs,
 } from './utils/storage';
 
-import { Sliders, Database, Palette, Grid, Sparkles } from 'lucide-react';
+import {
+  checkCloudHealth,
+  fetchCloudTemplates,
+  saveCloudTemplate,
+  deleteCloudTemplate,
+  fetchCloudSettings,
+  saveCloudSettings,
+} from './utils/cloudflareApi';
+
+import { Database, Palette, Grid } from 'lucide-react';
 
 export default function App() {
   // 1. Initialize State from LocalStorage
@@ -40,6 +49,11 @@ export default function App() {
   const [savedTemplates, setSavedTemplates] = useState(() => getSavedTemplates());
   const [allPresets, setAllPresets] = useState(() => getAllTemplates());
   const [historyLogs, setHistoryLogs] = useState(() => getHistoryLogs());
+
+  // Cloudflare State
+  const [isCloudConnected, setIsCloudConnected] = useState(false);
+  const [cloudTemplates, setCloudTemplates] = useState([]);
+  const [isCloudLoading, setIsCloudLoading] = useState(false);
 
   // Active Sidebar Tab: 'data', 'layout', 'style'
   const [activeTab, setActiveTab] = useState('data');
@@ -58,6 +72,28 @@ export default function App() {
     saveActiveDataConfig(dataConfig);
   }, [dataConfig]);
 
+  // Load from Cloudflare D1 on initial mount
+  const refreshCloud = useCallback(async () => {
+    setIsCloudLoading(true);
+    try {
+      const healthy = await checkCloudHealth();
+      setIsCloudConnected(healthy);
+      if (healthy) {
+        const cTpls = await fetchCloudTemplates();
+        setCloudTemplates(cTpls);
+      }
+    } catch (err) {
+      console.warn('Cloudflare initial sync failed:', err);
+      setIsCloudConnected(false);
+    } finally {
+      setIsCloudLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshCloud();
+  }, [refreshCloud]);
+
   const refreshTemplates = useCallback(() => {
     setSavedTemplates(getSavedTemplates());
     setAllPresets(getAllTemplates());
@@ -74,21 +110,78 @@ export default function App() {
 
   // Handle Preset Selection
   const handleSelectPreset = (presetId) => {
-    const found = allPresets.find(p => p.id === presetId);
-    if (found) {
-      setLayout(found);
+    // Check built-in and local presets
+    const foundLocal = allPresets.find(p => p.id === presetId);
+    if (foundLocal) {
+      setLayout(foundLocal);
+      return;
+    }
+    // Check cloud templates
+    const foundCloud = cloudTemplates.find(p => p.id === presetId);
+    if (foundCloud) {
+      handleLoadTemplate(foundCloud);
     }
   };
 
-  // Handle Custom Template Save
-  const handleSaveTemplate = (newTemplate) => {
+  // Handle Loading a Template (with bundled layout & print data)
+  const handleLoadTemplate = (tpl) => {
+    if (tpl.layout) {
+      setLayout(tpl.layout);
+    } else {
+      // flat template format
+      setLayout(tpl);
+    }
+
+    if (tpl.dataConfig) {
+      setDataConfig(tpl.dataConfig);
+    }
+
+    // If template has bundled print items
+    if (tpl.items && Array.isArray(tpl.items) && tpl.items.length > 0) {
+      if (tpl.dataConfig?.mode === 'manual' || !tpl.dataConfig?.mode) {
+        setDataConfig(prev => ({
+          ...prev,
+          mode: 'manual',
+          manualList: tpl.items.map(i => i.serial).join('\n'),
+          count: tpl.items.length,
+        }));
+      }
+    }
+  };
+
+  // Handle Custom Template Save (Local and Cloudflare D1)
+  const handleSaveTemplate = async (newTemplate, saveToCloud = true) => {
+    if (saveToCloud && isCloudConnected) {
+      await saveCloudTemplate({
+        id: newTemplate.id,
+        name: newTemplate.name,
+        description: newTemplate.description,
+        layout: newTemplate.layout || layout,
+        dataConfig: newTemplate.dataConfig || dataConfig,
+        items: newTemplate.items || items,
+      });
+      await refreshCloud();
+    }
+
+    // Also mirror to local storage
     saveTemplate(newTemplate);
     refreshTemplates();
-    setLayout(newTemplate);
+    if (newTemplate.layout) {
+      setLayout(newTemplate.layout);
+    }
   };
 
   // Handle Custom Template Delete
-  const handleDeleteTemplate = (templateId) => {
+  const handleDeleteTemplate = async (templateId, isCloud = false) => {
+    if (isCloud && isCloudConnected) {
+      try {
+        await deleteCloudTemplate(templateId);
+        await refreshCloud();
+      } catch (err) {
+        console.error('Failed to delete from Cloudflare:', err);
+      }
+    }
+
     deleteTemplate(templateId);
     refreshTemplates();
     if (layout.id === templateId) {
@@ -130,6 +223,24 @@ export default function App() {
   const stickersPerPage = (parseInt(layout.columns, 10) || 9) * (parseInt(layout.rows, 10) || 13);
   const totalPages = Math.max(1, Math.ceil(items.length / stickersPerPage));
 
+  // Merge built-in presets, local presets, and cloud templates for dropdown
+  const combinedPresets = useMemo(() => {
+    const list = [...allPresets];
+    cloudTemplates.forEach(ct => {
+      if (!list.some(item => item.id === ct.id)) {
+        list.push({
+          id: ct.id,
+          name: `☁️ ${ct.name}`,
+          description: ct.description || `Cloud D1 (${ct.itemCount || 0} ดวง)`,
+          isCustom: true,
+          isCloud: true,
+          ...ct.layout,
+        });
+      }
+    });
+    return list;
+  }, [allPresets, cloudTemplates]);
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 text-slate-800 antialiased font-sans">
       {/* Top Navbar */}
@@ -137,6 +248,7 @@ export default function App() {
         items={items}
         layout={layout}
         dataConfig={dataConfig}
+        isCloudConnected={isCloudConnected}
         onOpenTemplates={() => setIsTemplatesOpen(true)}
         onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenPrint={() => setIsPrintOpen(true)}
@@ -200,7 +312,7 @@ export default function App() {
               <LayoutSettingsPanel
                 layout={layout}
                 onChange={setLayout}
-                presets={allPresets}
+                presets={combinedPresets}
                 onSelectPreset={handleSelectPreset}
               />
             )}
@@ -226,11 +338,16 @@ export default function App() {
         isOpen={isTemplatesOpen}
         onClose={() => setIsTemplatesOpen(false)}
         currentLayout={layout}
+        currentDataConfig={dataConfig}
+        currentItems={items}
         savedTemplates={savedTemplates}
+        cloudTemplates={cloudTemplates}
+        isCloudConnected={isCloudConnected}
+        isCloudLoading={isCloudLoading}
         onSaveTemplate={handleSaveTemplate}
         onDeleteTemplate={handleDeleteTemplate}
-        onSelectTemplate={setLayout}
-        onRefresh={refreshTemplates}
+        onSelectTemplate={handleLoadTemplate}
+        onRefreshCloud={refreshCloud}
       />
 
       <HistoryModal

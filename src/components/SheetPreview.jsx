@@ -249,6 +249,9 @@ function SingleSheet({
   cellWidthMm,
   cellHeightMm,
 }) {
+  const isSeamlessGrid = Number(colGap) === 0 && Number(rowGap) === 0 && layout.showBorder && layout.borderStyle !== 'none';
+  const borderStroke = `${layout.borderWidth || 0.5}px ${layout.borderStyle || 'solid'} ${layout.borderColor || '#cbd5e1'}`;
+
   return (
     <div
       className={`print-page relative bg-white shadow-xl rounded-xs print:rounded-none select-none transition-shadow ${
@@ -278,6 +281,7 @@ function SingleSheet({
           gridTemplateRows: `repeat(${rows}, ${cellHeightMm}mm)`,
           columnGap: `${colGap}mm`,
           rowGap: `${rowGap}mm`,
+          ...(isSeamlessGrid ? { borderTop: borderStroke, borderLeft: borderStroke } : {}),
         }}
       >
         {items.map((item) => (
@@ -287,6 +291,7 @@ function SingleSheet({
             layout={layout}
             cellWidthMm={cellWidthMm}
             cellHeightMm={cellHeightMm}
+            isSeamlessGrid={isSeamlessGrid}
           />
         ))}
 
@@ -294,10 +299,14 @@ function SingleSheet({
         {Array.from({ length: Math.max(0, cols * rows - items.length) }).map((_, idx) => (
           <div
             key={`empty-${idx}`}
-            className="border border-dashed border-slate-200/60 rounded-xs flex items-center justify-center"
+            className="flex items-center justify-center"
             style={{
               width: `${cellWidthMm}mm`,
               height: `${cellHeightMm}mm`,
+              ...(isSeamlessGrid
+                ? { borderRight: borderStroke, borderBottom: borderStroke }
+                : { border: '1px dashed rgba(203, 213, 225, 0.6)' }
+              ),
             }}
           />
         ))}

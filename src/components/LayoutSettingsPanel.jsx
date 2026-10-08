@@ -189,9 +189,22 @@ export function LayoutSettingsPanel({ layout, onChange, presets, onSelectPreset 
 
       {/* Spacing / Gap */}
       <div className="pt-2 border-t border-slate-200">
-        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-          ระยะห่างระหว่างดวง (Gaps - mm)
-        </label>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+            ระยะห่างระหว่างดวง (Gaps - mm)
+          </label>
+          <button
+            type="button"
+            onClick={() => updateLayout({ colGap: 0, rowGap: 0 })}
+            className={`text-[11px] px-2 py-0.5 rounded font-medium transition cursor-pointer ${
+              Number(layout.colGap) === 0 && Number(layout.rowGap) === 0
+                ? 'bg-blue-100 text-blue-700 font-semibold border border-blue-200'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+            }`}
+          >
+            ✓ ชิดกันเป็นเส้นเดียว (0 mm)
+          </button>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <span className="text-[11px] text-slate-600 block mb-0.5">ช่องว่างแนวนอน (Col Gap):</span>

@@ -6,6 +6,7 @@ export function Header({
   items,
   layout,
   dataConfig,
+  isCloudConnected = false,
   onOpenTemplates,
   onOpenHistory,
   onOpenPrint,
@@ -66,10 +67,17 @@ export function Header({
             <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-none">
               Mainon QR-Product-Lot
             </h1>
-            <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-medium bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
-              <HardDrive className="w-3 h-3" />
-              Localhost Storage
-            </span>
+            {isCloudConnected ? (
+              <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-medium bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Cloudflare D1 (24charge-db)
+              </span>
+            ) : (
+              <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full border border-slate-200">
+                <HardDrive className="w-3 h-3" />
+                Localhost Storage
+              </span>
+            )}
           </div>
           <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">
             เว็บสร้างและจัดหน้าสติกเกอร์ QR Code Serial No. พิมพ์ลงกระดาษ A4 ไดคัท

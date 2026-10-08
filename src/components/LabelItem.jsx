@@ -6,6 +6,7 @@ export const LabelItem = React.memo(function LabelItem({
   layout,
   cellWidthMm,
   cellHeightMm,
+  isSeamlessGrid = false,
 }) {
   const [svgContent, setSvgContent] = useState('');
 
@@ -23,9 +24,21 @@ export const LabelItem = React.memo(function LabelItem({
   }, [item.qrValue, layout.qrErrorCorrection, layout.qrColorDark, layout.qrColorLight]);
 
   // Border style
-  const borderCss = layout.showBorder && layout.borderStyle !== 'none'
+  const hasBorder = layout.showBorder && layout.borderStyle !== 'none';
+  const borderStroke = hasBorder
     ? `${layout.borderWidth || 0.5}px ${layout.borderStyle || 'solid'} ${layout.borderColor || '#cbd5e1'}`
     : 'none';
+
+  const borderStyles = isSeamlessGrid && hasBorder
+    ? {
+        borderRight: borderStroke,
+        borderBottom: borderStroke,
+        borderTop: 'none',
+        borderLeft: 'none',
+      }
+    : {
+        border: borderStroke,
+      };
 
   return (
     <div
@@ -33,8 +46,8 @@ export const LabelItem = React.memo(function LabelItem({
       style={{
         width: `${cellWidthMm}mm`,
         height: `${cellHeightMm}mm`,
-        border: borderCss,
-        borderRadius: `${layout.borderRadius || 0}px`,
+        ...borderStyles,
+        borderRadius: isSeamlessGrid ? 0 : `${layout.borderRadius || 0}px`,
         padding: '0.8mm',
         boxSizing: 'border-box',
         backgroundColor: '#ffffff',
