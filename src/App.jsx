@@ -39,7 +39,19 @@ import { Database, Palette, Grid } from 'lucide-react';
 export default function App() {
   // 1. Initialize State from LocalStorage
   const [layout, setLayout] = useState(() => {
-    return getActiveLayout() || DEFAULT_PRESETS[0];
+    const saved = getActiveLayout();
+    if (saved) {
+      if (saved.id === 'pdf-9x13-standard') {
+        return {
+          ...DEFAULT_PRESETS[0],
+          ...saved,
+          colGap: 0,
+          rowGap: 0,
+        };
+      }
+      return saved;
+    }
+    return DEFAULT_PRESETS[0];
   });
 
   const [dataConfig, setDataConfig] = useState(() => {

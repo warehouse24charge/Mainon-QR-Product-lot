@@ -16,15 +16,15 @@ export function SheetPreview({ items, layout }) {
   const marginBottom = Number(layout.marginBottom) || 10;
   const marginLeft = Number(layout.marginLeft) || 8;
   const marginRight = Number(layout.marginRight) || 8;
-  const colGap = Number(layout.colGap) || 1.2;
-  const rowGap = Number(layout.rowGap) || 1.2;
+  const colGap = layout.colGap !== undefined && layout.colGap !== null && layout.colGap !== '' ? Number(layout.colGap) : 0;
+  const rowGap = layout.rowGap !== undefined && layout.rowGap !== null && layout.rowGap !== '' ? Number(layout.rowGap) : 0;
 
   // Exact mm cell size
   const printableWidth = Math.max(10, paperWidth - marginLeft - marginRight - (cols - 1) * colGap);
-  const cellWidthMm = Number((printableWidth / cols).toFixed(2));
+  const cellWidthMm = Number((printableWidth / cols).toFixed(3));
 
   const printableHeight = Math.max(10, paperHeight - marginTop - marginBottom - (rows - 1) * rowGap);
-  const cellHeightMm = Number((printableHeight / rows).toFixed(2));
+  const cellHeightMm = Number((printableHeight / rows).toFixed(3));
 
   const stickersPerPage = cols * rows;
   const totalPages = Math.max(1, Math.ceil(items.length / stickersPerPage));
@@ -252,6 +252,9 @@ function SingleSheet({
   const isSeamlessGrid = Number(colGap) === 0 && Number(rowGap) === 0 && layout.showBorder && layout.borderStyle !== 'none';
   const borderStroke = `${layout.borderWidth || 0.5}px ${layout.borderStyle || 'solid'} ${layout.borderColor || '#cbd5e1'}`;
 
+  const gridColumnsStyle = isSeamlessGrid ? `repeat(${cols}, 1fr)` : `repeat(${cols}, ${cellWidthMm}mm)`;
+  const gridRowsStyle = isSeamlessGrid ? `repeat(${rows}, 1fr)` : `repeat(${rows}, ${cellHeightMm}mm)`;
+
   return (
     <div
       className={`print-page relative bg-white shadow-xl rounded-xs print:rounded-none select-none transition-shadow ${
@@ -277,10 +280,11 @@ function SingleSheet({
       <div
         className="w-full h-full grid"
         style={{
-          gridTemplateColumns: `repeat(${cols}, ${cellWidthMm}mm)`,
-          gridTemplateRows: `repeat(${rows}, ${cellHeightMm}mm)`,
+          gridTemplateColumns: gridColumnsStyle,
+          gridTemplateRows: gridRowsStyle,
           columnGap: `${colGap}mm`,
           rowGap: `${rowGap}mm`,
+          boxSizing: 'border-box',
           ...(isSeamlessGrid ? { borderTop: borderStroke, borderLeft: borderStroke } : {}),
         }}
       >
@@ -301,8 +305,10 @@ function SingleSheet({
             key={`empty-${idx}`}
             className="flex items-center justify-center"
             style={{
-              width: `${cellWidthMm}mm`,
-              height: `${cellHeightMm}mm`,
+              width: isSeamlessGrid ? '100%' : `${cellWidthMm}mm`,
+              height: isSeamlessGrid ? '100%' : `${cellHeightMm}mm`,
+              boxSizing: 'border-box',
+              backgroundColor: '#ffffff',
               ...(isSeamlessGrid
                 ? { borderRight: borderStroke, borderBottom: borderStroke }
                 : { border: '1px dashed rgba(203, 213, 225, 0.6)' }

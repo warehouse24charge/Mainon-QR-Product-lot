@@ -19,10 +19,12 @@ export function LayoutSettingsPanel({ layout, onChange, presets, onSelectPreset 
   };
 
   // Cell size calculation preview
-  const printableWidth = Math.max(0, (layout.paperWidth || 210) - (layout.marginLeft || 8) - (layout.marginRight || 8) - ((layout.columns || 9) - 1) * (layout.colGap || 1.2));
+  const colGapVal = layout.colGap !== undefined && layout.colGap !== null && layout.colGap !== '' ? Number(layout.colGap) : 0;
+  const rowGapVal = layout.rowGap !== undefined && layout.rowGap !== null && layout.rowGap !== '' ? Number(layout.rowGap) : 0;
+  const printableWidth = Math.max(0, (layout.paperWidth || 210) - (layout.marginLeft || 8) - (layout.marginRight || 8) - ((layout.columns || 9) - 1) * colGapVal);
   const cellWidthMm = (printableWidth / (layout.columns || 9)).toFixed(2);
 
-  const printableHeight = Math.max(0, (layout.paperHeight || 297) - (layout.marginTop || 10) - (layout.marginBottom || 10) - ((layout.rows || 13) - 1) * (layout.rowGap || 1.2));
+  const printableHeight = Math.max(0, (layout.paperHeight || 297) - (layout.marginTop || 10) - (layout.marginBottom || 10) - ((layout.rows || 13) - 1) * rowGapVal);
   const cellHeightMm = (printableHeight / (layout.rows || 13)).toFixed(2);
 
   return (

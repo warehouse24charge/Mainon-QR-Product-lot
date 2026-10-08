@@ -44,8 +44,8 @@ export const LabelItem = React.memo(function LabelItem({
     <div
       className="label-item flex flex-col items-center justify-center overflow-hidden transition-all select-none"
       style={{
-        width: `${cellWidthMm}mm`,
-        height: `${cellHeightMm}mm`,
+        width: isSeamlessGrid ? '100%' : `${cellWidthMm}mm`,
+        height: isSeamlessGrid ? '100%' : `${cellHeightMm}mm`,
         ...borderStyles,
         borderRadius: isSeamlessGrid ? 0 : `${layout.borderRadius || 0}px`,
         padding: '0.8mm',
