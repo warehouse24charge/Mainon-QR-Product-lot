@@ -21,6 +21,8 @@ export function generateSerialList(dataConfig) {
     // Excel
     excelData = [],
     excelColumn = '',
+    // Master DB
+    masterSerials = [],
     // QR formatting
     qrContentType = 'serial',
     qrUrlTemplate = 'https://mainon.com/verify?sn={SERIAL}',
@@ -86,6 +88,18 @@ export function generateSerialList(dataConfig) {
           return val ? { serial: val, displayNumber: val, originalRow: row, index: idx } : null;
         })
         .filter(Boolean);
+    }
+  } else if (mode === 'master') {
+    if (Array.isArray(masterSerials) && masterSerials.length > 0) {
+      rawSerials = masterSerials.map((s, idx) => {
+        const val = typeof s === 'object' && s !== null ? (s.serial_no || s.serial) : String(s);
+        return {
+          serial: String(val).trim(),
+          displayNumber: String(val).trim(),
+          originalRow: typeof s === 'object' ? s : null,
+          index: idx,
+        };
+      }).filter(item => Boolean(item.serial));
     }
   } else if (mode === 'random') {
     const safeCount = Math.min(Math.max(1, parseInt(randomCount, 10) || 1), 5000);

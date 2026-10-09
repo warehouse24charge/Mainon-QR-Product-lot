@@ -128,3 +128,64 @@ export async function saveCloudSettings(settings) {
     return false;
   }
 }
+
+/**
+ * Fetch master metadata (categories, products, lots) from Operation website D1
+ */
+export async function fetchMasterMeta() {
+  try {
+    const res = await fetch(`${CLOUDFLARE_API_URL}/api/master/meta`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return {
+      categories: data.categories || [],
+      products: data.products || [],
+      lots: data.lots || [],
+    };
+  } catch (err) {
+    console.error('Failed to fetch master metadata:', err);
+    throw err;
+  }
+}
+
+/**
+ * Query master serial numbers from Operation website D1
+ */
+export async function fetchMasterSerials({
+  categoryId = null,
+  productId = null,
+  productType = null,
+  lotNo = null,
+  status = null,
+  limit = 2000,
+} = {}) {
+  try {
+    const params = new URLSearchParams();
+    if (categoryId) params.append('categoryId', categoryId);
+    if (productId) params.append('productId', productId);
+    if (productType) params.append('productType', productType);
+    if (lotNo) params.append('lotNo', lotNo);
+    if (status) params.append('status', status);
+    if (limit) params.append('limit', limit);
+
+    const res = await fetch(`${CLOUDFLARE_API_URL}/api/master/serials?${params.toString()}`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return {
+      total: data.total || 0,
+      serials: data.serials || [],
+    };
+  } catch (err) {
+    console.error('Failed to fetch master serials:', err);
+    throw err;
+  }
+}
+

@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { Hash, ListOrdered, FileSpreadsheet, Shuffle, Link2, Sparkles, AlertCircle } from 'lucide-react';
+import { Hash, ListOrdered, FileSpreadsheet, Shuffle, Link2, Sparkles, AlertCircle, Database } from 'lucide-react';
+import { MasterDbSelector } from './MasterDbSelector';
 
 export function DataInputPanel({ dataConfig, onChange, layout }) {
   const fileInputRef = useRef(null);
@@ -63,59 +64,99 @@ export function DataInputPanel({ dataConfig, onChange, layout }) {
         <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
           วิธีการสร้าง Serial Number
         </label>
-        <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+
+        {/* Master DB Button (Highlighted) */}
+        <div className="space-y-1.5">
           <button
             type="button"
-            onClick={() => updateConfig({ mode: 'sequential' })}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-medium transition ${
-              dataConfig.mode === 'sequential'
-                ? 'bg-white text-blue-700 shadow-xs font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
+            onClick={() => updateConfig({ mode: 'master' })}
+            className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-between transition border cursor-pointer ${
+              dataConfig.mode === 'master'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20'
+                : 'bg-blue-50/70 hover:bg-blue-100 text-blue-800 border-blue-200'
             }`}
           >
-            <ListOrdered className="w-4 h-4" />
-            เลขรันอัตโนมัติ
+            <div className="flex items-center gap-2">
+              <Database className="w-4 h-4" />
+              <span>ดึงจาก Serial No. Master (Operation Website)</span>
+            </div>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+              dataConfig.mode === 'master' ? 'bg-white/20 text-white' : 'bg-blue-200/60 text-blue-900'
+            }`}>
+              Cloud D1
+            </span>
           </button>
-          <button
-            type="button"
-            onClick={() => updateConfig({ mode: 'manual' })}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-medium transition ${
-              dataConfig.mode === 'manual'
-                ? 'bg-white text-blue-700 shadow-xs font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Hash className="w-4 h-4" />
-            กรอกรายการเอง
-          </button>
-          <button
-            type="button"
-            onClick={() => updateConfig({ mode: 'excel' })}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-medium transition ${
-              dataConfig.mode === 'excel'
-                ? 'bg-white text-blue-700 shadow-xs font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            นำเข้า Excel / CSV
-          </button>
-          <button
-            type="button"
-            onClick={() => updateConfig({ mode: 'random' })}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-medium transition ${
-              dataConfig.mode === 'random'
-                ? 'bg-white text-blue-700 shadow-xs font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Shuffle className="w-4 h-4" />
-            สุ่มรหัสกันปลอม
-          </button>
+
+          <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => updateConfig({ mode: 'sequential' })}
+              className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                dataConfig.mode === 'sequential'
+                  ? 'bg-white text-blue-700 shadow-xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ListOrdered className="w-4 h-4" />
+              เลขรันอัตโนมัติ
+            </button>
+            <button
+              type="button"
+              onClick={() => updateConfig({ mode: 'manual' })}
+              className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                dataConfig.mode === 'manual'
+                  ? 'bg-white text-blue-700 shadow-xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Hash className="w-4 h-4" />
+              กรอกรายการเอง
+            </button>
+            <button
+              type="button"
+              onClick={() => updateConfig({ mode: 'excel' })}
+              className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                dataConfig.mode === 'excel'
+                  ? 'bg-white text-blue-700 shadow-xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              นำเข้า Excel / CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => updateConfig({ mode: 'random' })}
+              className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                dataConfig.mode === 'random'
+                  ? 'bg-white text-blue-700 shadow-xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Shuffle className="w-4 h-4" />
+              สุ่มรหัสกันปลอม
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Mode Specific Inputs */}
+
+      {/* MODE 0: Master DB */}
+      {dataConfig.mode === 'master' && (
+        <MasterDbSelector
+          stickersPerPage={stickersPerPage}
+          onSelectSerials={({ serials, batchName, lotNo, product, count }) => {
+            updateConfig({
+              mode: 'master',
+              masterSerials: serials,
+              count: count,
+              batchName: batchName || dataConfig.batchName,
+              manualList: serials.map(s => s.serial_no).join('\n'),
+            });
+          }}
+        />
+      )}
 
       {/* MODE 1: Sequential */}
       {dataConfig.mode === 'sequential' && (
