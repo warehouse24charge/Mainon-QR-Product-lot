@@ -1,19 +1,17 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Database, Filter, Search, CheckCircle2, RefreshCw, AlertCircle, Package, Layers, Hash, ArrowDownToLine, Tag } from 'lucide-react';
+import { Database, CheckCircle2, RefreshCw, AlertCircle, Package, ArrowDownToLine, Tag } from 'lucide-react';
 import { fetchMasterMeta, fetchMasterSerials } from '../utils/cloudflareApi';
 
 export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
-  const [meta, setMeta] = useState({ categories: [], products: [], lots: [] });
+  const [meta, setMeta] = useState({ products: [], lots: [], lotProducts: [] });
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [error, setError] = useState(null);
 
-  // Filter States
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedProductType, setSelectedProductType] = useState(''); // 'FG' | 'RM' | ''
-  const [selectedProduct, setSelectedProduct] = useState('');
+  // Simplified Cascading Filters
   const [selectedLot, setSelectedLot] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
-  const [limitCount, setLimitCount] = useState('all'); // 'all', '1sheet', '2sheets', '5sheets', or number
+  const [limitCount, setLimitCount] = useState('all'); // 'all', '1sheet', '2sheets', '5sheets'
 
   // Query Results
   const [matchedSerials, setMatchedSerials] = useState([]);
@@ -27,7 +25,7 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
     try {
       const data = await fetchMasterMeta();
       setMeta(data);
-      // Auto-select first available lot if available
+      // Auto-select first available lot if available and none selected
       if (data.lots?.length > 0 && !selectedLot) {
         setSelectedLot(data.lots[0].lot_no);
       }
@@ -42,14 +40,28 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
     loadMeta();
   }, [loadMeta]);
 
-  // 2. Filtered products list based on category and type
-  const filteredProducts = useMemo(() => {
-    return (meta.products || []).filter(p => {
-      if (selectedCategory && String(p.category_id) !== String(selectedCategory)) return false;
-      if (selectedProductType && p.product_type !== selectedProductType) return false;
-      return true;
-    });
-  }, [meta.products, selectedCategory, selectedProductType]);
+  // 2. Cascaded Products: If a Lot is selected, show only products in that Lot
+  const availableProducts = useMemo(() => {
+    if (selectedLot) {
+      // Filter from lotProducts for the selected lot
+      return (meta.lotProducts || []).filter(lp => lp.lot_no === selectedLot);
+    }
+    // If no lot selected (All Lots), show all distinct products
+    return meta.products || [];
+  }, [meta.lotProducts, meta.products, selectedLot]);
+
+  // Total count in selected lot
+  const currentLotTotal = useMemo(() => {
+    if (!selectedLot) return 0;
+    const foundLot = meta.lots?.find(l => l.lot_no === selectedLot);
+    return foundLot ? foundLot.count : 0;
+  }, [meta.lots, selectedLot]);
+
+  // Handle lot change: reset selected product
+  const handleLotChange = (e) => {
+    setSelectedLot(e.target.value);
+    setSelectedProduct(''); // Reset product when switching Lot
+  };
 
   // 3. Query matching serials whenever filters change
   const querySerials = useCallback(async () => {
@@ -63,9 +75,7 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
       else if (typeof limitCount === 'number') limit = limitCount;
 
       const res = await fetchMasterSerials({
-        categoryId: selectedCategory || null,
         productId: selectedProduct || null,
-        productType: selectedProductType || null,
         lotNo: selectedLot || null,
         status: selectedStatus || null,
         limit,
@@ -77,7 +87,7 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
     } finally {
       setLoadingSerials(false);
     }
-  }, [selectedCategory, selectedProduct, selectedProductType, selectedLot, selectedStatus, limitCount, stickersPerPage]);
+  }, [selectedProduct, selectedLot, selectedStatus, limitCount, stickersPerPage]);
 
   useEffect(() => {
     querySerials();
@@ -90,9 +100,11 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
       return;
     }
 
-    const prodObj = meta.products?.find(p => String(p.id) === String(selectedProduct));
+    const prodObj = meta.products?.find(p => String(p.id) === String(selectedProduct))
+      || availableProducts.find(p => String(p.product_id || p.id) === String(selectedProduct));
+
     const lotLabel = selectedLot ? `Lot ${selectedLot}` : 'ทุกล็อต';
-    const prodLabel = prodObj ? `${prodObj.sku}` : (selectedProductType || 'Master');
+    const prodLabel = prodObj ? `${prodObj.sku}` : (matchedSerials[0]?.sku || 'สินค้าทั้งหมด');
     const batchName = `${lotLabel} - ${prodLabel}`;
 
     onSelectSerials({
@@ -114,7 +126,7 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-blue-600" />
           <span className="font-bold text-xs text-slate-800">
-            ระบบดึงข้อมูลจาก Master Database (24charge-db)
+            ดึงข้อมูลจาก Master DB (24charge-db)
           </span>
         </div>
         <button
@@ -151,8 +163,8 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
         </label>
         <select
           value={selectedLot}
-          onChange={(e) => setSelectedLot(e.target.value)}
-          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onChange={handleLotChange}
+          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">-- ทุกล็อต (All Lots) --</option>
           {meta.lots?.map((lot) => (
@@ -163,68 +175,51 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
         </select>
       </div>
 
-      {/* Filter 2: Category & Product Type */}
-      <div className="grid grid-cols-2 gap-2.5">
-        <div>
-          <label className="block text-[11px] font-medium text-slate-600 mb-1">
-            หมวดหมู่สินค้า:
-          </label>
-          <select
-            value={selectedCategory}
-            onChange={(e) => {
-              setSelectedCategory(e.target.value);
-              setSelectedProduct(''); // Reset product when category changes
-            }}
-            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800"
-          >
-            <option value="">ทุกหมวดหมู่</option>
-            {meta.categories?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name_th}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-[11px] font-medium text-slate-600 mb-1">
-            ประเภทสินค้า:
-          </label>
-          <select
-            value={selectedProductType}
-            onChange={(e) => {
-              setSelectedProductType(e.target.value);
-              setSelectedProduct('');
-            }}
-            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800"
-          >
-            <option value="">ทุกประเภท (All)</option>
-            <option value="FG">FG (เครื่องชาร์จสำเร็จรูป)</option>
-            <option value="RM">RM (วัตถุดิบ/ชิ้นส่วน/ซิม)</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Filter 3: Product / SKU */}
+      {/* Filter 2: Cascaded Product / SKU */}
       <div>
-        <label className="block text-[11px] font-medium text-slate-600 mb-1">
-          เลือกสินค้า / SKU:
+        <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <Package className="w-3.5 h-3.5 text-blue-600" />
+            เลือกสินค้า / SKU:
+          </span>
+          {selectedLot && (
+            <span className="text-[10px] text-blue-600 font-medium">
+              (แสดงเฉพาะสินค้าใน Lot นี้)
+            </span>
+          )}
         </label>
         <select
           value={selectedProduct}
           onChange={(e) => setSelectedProduct(e.target.value)}
-          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800"
+          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="">-- สินค้าทั้งหมด ({filteredProducts.length} รายการ) --</option>
-          {filteredProducts.map((p) => (
-            <option key={p.id} value={p.id}>
-              [{p.sku}] {p.name_th} ({p.product_type})
-            </option>
-          ))}
+          {selectedLot ? (
+            <>
+              <option value="">
+                -- สินค้าทั้งหมดใน Lot นี้ ({currentLotTotal} รายการ) --
+              </option>
+              {availableProducts.map((p) => (
+                <option key={p.product_id} value={p.product_id}>
+                  [{p.sku}] {p.name_th} ({p.count} รายการ)
+                </option>
+              ))}
+            </>
+          ) : (
+            <>
+              <option value="">
+                -- สินค้าทั้งหมด ({availableProducts.length} รายการ) --
+              </option>
+              {availableProducts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  [{p.sku}] {p.name_th}
+                </option>
+              ))}
+            </>
+          )}
         </select>
       </div>
 
-      {/* Filter 4: Status & Limit */}
+      {/* Filter 3: Status & Limit */}
       <div className="grid grid-cols-2 gap-2.5 pt-1 border-t border-slate-200">
         <div>
           <label className="block text-[11px] font-medium text-slate-600 mb-1">

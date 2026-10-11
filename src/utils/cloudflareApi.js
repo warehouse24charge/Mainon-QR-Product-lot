@@ -142,9 +142,9 @@ export async function fetchMasterMeta() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     return {
-      categories: data.categories || [],
       products: data.products || [],
       lots: data.lots || [],
+      lotProducts: data.lotProducts || [],
     };
   } catch (err) {
     console.error('Failed to fetch master metadata:', err);
