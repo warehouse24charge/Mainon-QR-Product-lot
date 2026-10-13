@@ -7,7 +7,7 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [error, setError] = useState(null);
 
-  // Simplified Cascading Filters: Product First -> Then Lot
+  // Simplified Cascading Filters: Product First (RM only) -> Then Lot
   const [selectedProduct, setSelectedProduct] = useState('');
   const [selectedLot, setSelectedLot] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
@@ -25,15 +25,17 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
     try {
       const data = await fetchMasterMeta();
       setMeta(data);
-      // Auto-select first product that has serials if none selected
-      if (!selectedProduct && data.products?.length > 0) {
-        const prodWithSerials = data.products.find(p =>
+      // Filter only RM products (FG products don't have serials)
+      const rmProducts = (data.products || []).filter(p => !p.product_type || p.product_type === 'RM');
+      // Auto-select first RM product that has serials if none selected
+      if (!selectedProduct && rmProducts.length > 0) {
+        const prodWithSerials = rmProducts.find(p =>
           data.lotProducts?.some(lp => String(lp.product_id) === String(p.id) && lp.count > 0)
         );
         if (prodWithSerials) {
           setSelectedProduct(String(prodWithSerials.id));
         } else {
-          setSelectedProduct(String(data.products[0].id));
+          setSelectedProduct(String(rmProducts[0].id));
         }
       }
     } catch (err) {
@@ -56,9 +58,10 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
     return map;
   }, [meta.lotProducts]);
 
-  // 3. Products list sorted: Products with serials first, then by SKU
+  // 3. RM Products list sorted: Products with serials first, then by SKU (FG excluded)
   const sortedProducts = useMemo(() => {
-    return [...(meta.products || [])].sort((a, b) => {
+    const rmProducts = (meta.products || []).filter(p => !p.product_type || p.product_type === 'RM');
+    return rmProducts.sort((a, b) => {
       const countA = productSerialCounts[a.id] || 0;
       const countB = productSerialCounts[b.id] || 0;
       if (countA > 0 && countB === 0) return -1;
@@ -111,6 +114,7 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
 
       const res = await fetchMasterSerials({
         productId: selectedProduct || null,
+        productType: 'RM', // Enforce RM only
         lotNo: selectedLot || null,
         status: selectedStatus || null,
         limit,
@@ -188,12 +192,12 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
         </div>
       )}
 
-      {/* Filter 1: Product / SKU First */}
+      {/* Filter 1: Product / SKU First (RM only) */}
       <div>
         <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <Package className="w-3.5 h-3.5 text-blue-600" />
-            1. เลือกสินค้า / SKU:
+            1. เลือกสินค้า / SKU (เฉพาะชิ้นส่วน/RM):
           </span>
           {selectedProduct && totalProductSerials > 0 && (
             <span className="text-[10px] text-blue-600 font-medium">
@@ -206,7 +210,7 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
           onChange={handleProductChange}
           className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="">-- สินค้าทั้งหมด ({meta.products?.length || 0} รายการ) --</option>
+          <option value="">-- สินค้า RM ทั้งหมด ({sortedProducts.length} รายการ) --</option>
           {sortedProducts.map((p) => {
             const count = productSerialCounts[p.id];
             return (
