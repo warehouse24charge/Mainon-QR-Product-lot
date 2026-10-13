@@ -7,9 +7,9 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [error, setError] = useState(null);
 
-  // Simplified Cascading Filters
-  const [selectedLot, setSelectedLot] = useState('');
+  // Simplified Cascading Filters: Product First -> Then Lot
   const [selectedProduct, setSelectedProduct] = useState('');
+  const [selectedLot, setSelectedLot] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [limitCount, setLimitCount] = useState('all'); // 'all', '1sheet', '2sheets', '5sheets'
 
@@ -25,45 +25,80 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
     try {
       const data = await fetchMasterMeta();
       setMeta(data);
-      // Auto-select first available lot if available and none selected
-      if (data.lots?.length > 0 && !selectedLot) {
-        setSelectedLot(data.lots[0].lot_no);
+      // Auto-select first product that has serials if none selected
+      if (!selectedProduct && data.products?.length > 0) {
+        const prodWithSerials = data.products.find(p =>
+          data.lotProducts?.some(lp => String(lp.product_id) === String(p.id) && lp.count > 0)
+        );
+        if (prodWithSerials) {
+          setSelectedProduct(String(prodWithSerials.id));
+        } else {
+          setSelectedProduct(String(data.products[0].id));
+        }
       }
     } catch (err) {
       setError('ไม่สามารถเชื่อมต่อ Cloudflare D1 Master Database ได้: ' + err.message);
     } finally {
       setLoadingMeta(false);
     }
-  }, [selectedLot]);
+  }, [selectedProduct]);
 
   useEffect(() => {
     loadMeta();
   }, [loadMeta]);
 
-  // 2. Cascaded Products: If a Lot is selected, show only products in that Lot
-  const availableProducts = useMemo(() => {
-    if (selectedLot) {
-      // Filter from lotProducts for the selected lot
-      return (meta.lotProducts || []).filter(lp => lp.lot_no === selectedLot);
+  // 2. Count total serials per product
+  const productSerialCounts = useMemo(() => {
+    const map = {};
+    (meta.lotProducts || []).forEach(lp => {
+      map[lp.product_id] = (map[lp.product_id] || 0) + lp.count;
+    });
+    return map;
+  }, [meta.lotProducts]);
+
+  // 3. Products list sorted: Products with serials first, then by SKU
+  const sortedProducts = useMemo(() => {
+    return [...(meta.products || [])].sort((a, b) => {
+      const countA = productSerialCounts[a.id] || 0;
+      const countB = productSerialCounts[b.id] || 0;
+      if (countA > 0 && countB === 0) return -1;
+      if (countA === 0 && countB > 0) return 1;
+      return a.sku.localeCompare(b.sku);
+    });
+  }, [meta.products, productSerialCounts]);
+
+  // 4. Cascaded Lots: If a Product is selected, show only lots belonging to this product
+  const availableLots = useMemo(() => {
+    if (selectedProduct) {
+      return (meta.lotProducts || []).filter(
+        lp => String(lp.product_id) === String(selectedProduct)
+      );
     }
-    // If no lot selected (All Lots), show all distinct products
-    return meta.products || [];
-  }, [meta.lotProducts, meta.products, selectedLot]);
+    // If no product selected, show all lots
+    return meta.lots || [];
+  }, [meta.lotProducts, meta.lots, selectedProduct]);
 
-  // Total count in selected lot
-  const currentLotTotal = useMemo(() => {
-    if (!selectedLot) return 0;
-    const foundLot = meta.lots?.find(l => l.lot_no === selectedLot);
-    return foundLot ? foundLot.count : 0;
-  }, [meta.lots, selectedLot]);
+  // Total count for current product across all its lots
+  const totalProductSerials = useMemo(() => {
+    if (!selectedProduct) return 0;
+    return (meta.lotProducts || [])
+      .filter(lp => String(lp.product_id) === String(selectedProduct))
+      .reduce((sum, item) => sum + (item.count || 0), 0);
+  }, [meta.lotProducts, selectedProduct]);
 
-  // Handle lot change: reset selected product
-  const handleLotChange = (e) => {
-    setSelectedLot(e.target.value);
-    setSelectedProduct(''); // Reset product when switching Lot
+  // Handle product change: reset selected lot
+  const handleProductChange = (e) => {
+    const newProductId = e.target.value;
+    setSelectedProduct(newProductId);
+    setSelectedLot(''); // Reset lot when switching product
   };
 
-  // 3. Query matching serials whenever filters change
+  // Handle lot change
+  const handleLotChange = (e) => {
+    setSelectedLot(e.target.value);
+  };
+
+  // 5. Query matching serials whenever filters change
   const querySerials = useCallback(async () => {
     setLoadingSerials(true);
     setError(null);
@@ -93,19 +128,17 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
     querySerials();
   }, [querySerials]);
 
-  // 4. Apply Serials to Print
+  // 6. Apply Serials to Print
   const handleApply = () => {
     if (matchedSerials.length === 0) {
       alert('ไม่พบข้อมูล Serial Number ที่ตรงกับเงื่อนไข');
       return;
     }
 
-    const prodObj = meta.products?.find(p => String(p.id) === String(selectedProduct))
-      || availableProducts.find(p => String(p.product_id || p.id) === String(selectedProduct));
-
+    const prodObj = meta.products?.find(p => String(p.id) === String(selectedProduct));
     const lotLabel = selectedLot ? `Lot ${selectedLot}` : 'ทุกล็อต';
     const prodLabel = prodObj ? `${prodObj.sku}` : (matchedSerials[0]?.sku || 'สินค้าทั้งหมด');
-    const batchName = `${lotLabel} - ${prodLabel}`;
+    const batchName = `${prodLabel} - ${lotLabel}`;
 
     onSelectSerials({
       serials: matchedSerials,
@@ -155,63 +188,71 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
         </div>
       )}
 
-      {/* Filter 1: Lot No. */}
+      {/* Filter 1: Product / SKU First */}
       <div>
-        <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-          <Tag className="w-3.5 h-3.5 text-blue-600" />
-          เลือก Lot No. (Lot สินค้า):
+        <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <Package className="w-3.5 h-3.5 text-blue-600" />
+            1. เลือกสินค้า / SKU:
+          </span>
+          {selectedProduct && totalProductSerials > 0 && (
+            <span className="text-[10px] text-blue-600 font-medium">
+              ({totalProductSerials} รายการ ใน {availableLots.length} Lot)
+            </span>
+          )}
+        </label>
+        <select
+          value={selectedProduct}
+          onChange={handleProductChange}
+          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">-- สินค้าทั้งหมด ({meta.products?.length || 0} รายการ) --</option>
+          {sortedProducts.map((p) => {
+            const count = productSerialCounts[p.id];
+            return (
+              <option key={p.id} value={p.id}>
+                [{p.sku}] {p.name_th} {count ? `(${count} รายการ)` : ''}
+              </option>
+            );
+          })}
+        </select>
+      </div>
+
+      {/* Filter 2: Cascaded Lot No. (Filtered by Selected Product) */}
+      <div>
+        <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <Tag className="w-3.5 h-3.5 text-blue-600" />
+            2. เลือก Lot No. (Lot สินค้า):
+          </span>
+          {selectedProduct && (
+            <span className="text-[10px] text-blue-600 font-medium">
+              (แสดงเฉพาะ Lot ของสินค้านี้)
+            </span>
+          )}
         </label>
         <select
           value={selectedLot}
           onChange={handleLotChange}
           className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="">-- ทุกล็อต (All Lots) --</option>
-          {meta.lots?.map((lot) => (
-            <option key={lot.lot_no} value={lot.lot_no}>
-              {lot.lot_no} ({lot.count} รายการ)
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Filter 2: Cascaded Product / SKU */}
-      <div>
-        <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
-            <Package className="w-3.5 h-3.5 text-blue-600" />
-            เลือกสินค้า / SKU:
-          </span>
-          {selectedLot && (
-            <span className="text-[10px] text-blue-600 font-medium">
-              (แสดงเฉพาะสินค้าใน Lot นี้)
-            </span>
-          )}
-        </label>
-        <select
-          value={selectedProduct}
-          onChange={(e) => setSelectedProduct(e.target.value)}
-          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {selectedLot ? (
+          {selectedProduct ? (
             <>
               <option value="">
-                -- สินค้าทั้งหมดใน Lot นี้ ({currentLotTotal} รายการ) --
+                -- ทุกล็อตของสินค้านี้ ({totalProductSerials} รายการ) --
               </option>
-              {availableProducts.map((p) => (
-                <option key={p.product_id} value={p.product_id}>
-                  [{p.sku}] {p.name_th} ({p.count} รายการ)
+              {availableLots.map((lot) => (
+                <option key={lot.lot_no} value={lot.lot_no}>
+                  {lot.lot_no} ({lot.count} รายการ)
                 </option>
               ))}
             </>
           ) : (
             <>
-              <option value="">
-                -- สินค้าทั้งหมด ({availableProducts.length} รายการ) --
-              </option>
-              {availableProducts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  [{p.sku}] {p.name_th}
+              <option value="">-- ทุกล็อต (All Lots) --</option>
+              {meta.lots?.map((lot) => (
+                <option key={lot.lot_no} value={lot.lot_no}>
+                  {lot.lot_no} ({lot.count} รายการ)
                 </option>
               ))}
             </>
@@ -290,6 +331,7 @@ export function MasterDbSelector({ onSelectSerials, stickersPerPage = 117 }) {
             </div>
             <div className="text-[11px] text-slate-500">
               สินค้า: <strong>{matchedSerials[0]?.product_name || '-'}</strong> ({matchedSerials[0]?.sku || '-'})
+              {selectedLot && <span> | Lot: <strong>{selectedLot}</strong></span>}
             </div>
           </div>
         ) : (
